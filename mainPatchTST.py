@@ -29,26 +29,28 @@ from utils.quantile_loss import pinball_loss
 from conformal.cqr import cqr_calibrate, cqr_apply, coverage_width
 
 # ===================== CONFIG =====================
-CSV_PATH    = 'data/weather.csv'   # <-- ruta al weather.csv
-TARGET_COL  = 'T (degC)'           # <-- objetivo en weather (puedes cambiarlo p.ej. 'rh (%)')
+CSV_PATH    = 'data/electricity.csv'   
+#CSV_PATH    = 'data/weather.csv'  
+#CSV_PATH    = 'data/top3_menos_nulos.csv'
+TARGET_COL  = '2'           
 
-N_STEPS_IN  = 1008   # 7 días * 24h * 6 (10-min) = 1008
+N_STEPS_IN  = 144   
 N_STEPS_OUT = 1
-TEST_SIZE   = 0.05
-CALIB_RATIO = 0.05           # porción final del train para calibración conforme
+TEST_SIZE   = 0.1
+CALIB_RATIO = 0.1           
 BATCH_SIZE  = 256
-EPOCHS      = 200
-LR          = 1e-3
+EPOCHS      = 40
+LR          = 1e-4
+print(LR)
 
-# CONFIG
-ALPHA = 0.05  # 95%
+ALPHA = 0.05  
 _q = list(np.round(np.linspace(0.01, 0.99, 99), 4))
 _q += [0.025, 0.975]
 QUANTILES = tuple(sorted(set(_q)))
 
-STEP_A_GRAFICAR = 1           # horizonte a graficar (1..N_STEPS_OUT)
+STEP_A_GRAFICAR = 1           
 RESULTS_DIR = 'resultados_CQR'
-INPUT_FORMAT = 'channels_last'  # 'channels_last' (B,L,C) o 'channels_first' (B,C,L)
+INPUT_FORMAT = 'channels_last' 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -83,53 +85,64 @@ def closest_idx(taus, target):
     arr = np.asarray(taus, dtype=float)
     return int(np.abs(arr - target).argmin())
 
-# =============== Lectura serie (weather 10-min o genérico) ===============
 df = pd.read_csv(CSV_PATH)
 
 TIME_COL_CANDS = ['date', 'Date', 'Date Time', 'datetime', 'timestamp', 'time']
 time_col = next((c for c in TIME_COL_CANDS if c in df.columns), None)
 
-def resolve_target(df, desired):
-    if desired is None: return None
-    cols_lower = {c.lower(): c for c in df.columns}
-    if desired.lower() in cols_lower: return cols_lower[desired.lower()]
-    raise KeyError
 
-try:
-    target_col = resolve_target(df, TARGET_COL)
-except KeyError:
-    # heurística: usa 'OT' (ETT) o 'T (degC)' (weather) o la primera numérica
+# --- Verificación de columna objetivo ---
+if TARGET_COL not in df.columns:
+    # Intenta encontrarla con heurística si no existe la configurada
+    print(f"[WARN] Columna '{TARGET_COL}' no encontrada. Intentando heurística...")
     if 'OT' in df.columns: target_col = 'OT'
     elif 'T (degC)' in df.columns: target_col = 'T (degC)'
     else:
         num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        if not num_cols:
-            raise KeyError(f"No encuentro columna objetivo '{TARGET_COL}' en {CSV_PATH}")
+        if not num_cols: raise KeyError(f"No encuentro columna objetivo '{TARGET_COL}' ni ninguna numérica en {CSV_PATH}")
         target_col = num_cols[0]
-    print(f"[INFO] TARGET_COL no encontrado; usando '{target_col}' automáticamente.")
+    print(f"[INFO] Usando columna objetivo '{target_col}' automáticamente.")
 else:
-    if target_col != TARGET_COL:
-        print(f"[INFO] Normalizado TARGET_COL → '{target_col}'")
+    target_col = TARGET_COL
+    print(f"[INFO] Usando columna objetivo configurada: '{target_col}'")
+
 
 if time_col is None:
+    print("[WARN] No se encontró columna de tiempo. Se usarán índices numéricos.")
     serie = df[[target_col]].rename(columns={target_col: 'y'})
     prediction_index = pd.RangeIndex(len(serie))  # índices enteros
 else:
+    print(f"[INFO] Columna de tiempo encontrada: '{time_col}'")
     df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
-    df = df.dropna(subset=[time_col])
+    df = df.dropna(subset=[time_col, target_col])
     serie = (
         df[[time_col, target_col]]
         .rename(columns={time_col: 'timestamp', target_col: 'y'})
         .set_index('timestamp')
         .sort_index()
     )
-    # weather: 10-min
-    try: serie = serie.asfreq('10min')
-    except Exception: pass
+    
+    # <<< ESTA ES LA LÓGICA CLAVE MEJORADA >>>
+    # 1. Intentamos inferir la frecuencia directamente de los datos del CSV.
+    inferred_freq = pd.infer_freq(serie.index)
+    
+    if inferred_freq:
+        # 2. Si se encuentra una frecuencia, la usamos para rellenar pequeños huecos.
+        #    Esto no inflará el dataset si la frecuencia es, por ejemplo, 'H' (horaria).
+        print(f"[INFO] Frecuencia inferida: {inferred_freq}. Re-muestreando para asegurar regularidad.")
+        serie = serie.asfreq(inferred_freq)
+    else:
+        # 3. Si no se puede inferir (datos irregulares), se emite una advertencia
+        #    y se continúa sin re-muestrear, evitando la creación de filas artificiales.
+        print("[WARN] No se pudo inferir la frecuencia. Se usarán los datos tal como están.")
+    
     prediction_index = serie.index
 
-serie['y'] = serie['y'].interpolate()
-print(f"[INFO] Serie WEATHER: {len(serie)} filas. Rango: {prediction_index.min()} — {prediction_index.max()}")
+# Interpolar para rellenar cualquier hueco que haya quedado (muy importante)
+serie['y'] = serie['y'].interpolate(method='linear', limit_direction='both')
+print(f"[INFO] Serie procesada: {len(serie)} filas. Rango: {prediction_index.min()} — {prediction_index.max()}")
+
+
 
 # ===================== Sliding window =====================
 vals = serie['y'].values
@@ -320,8 +333,8 @@ def nearest_divisor(n: int, target: int) -> int:
                     best, bestdiff = cand, diff
     return best
 
-ROLL_BLOCK = 0  # 1 semana (10-min). Pon 144 para 1 día, 0 para desactivar.
-MAX_LINES  = 12     # imprime como máx. 12 bloques (primeros 11 y el último)
+ROLL_BLOCK = 0  
+MAX_LINES  = 12   
 
 if ROLL_BLOCK and ROLL_BLOCK > 0:
     block = nearest_divisor(Ntest, ROLL_BLOCK)
@@ -367,20 +380,18 @@ mid = 0.5 * (lo + hi)
 
 plt.figure(figsize=(15,6))
 plt.plot(ts_plot, y_true[:, h], label='Real', alpha=0.9)
-plt.plot(ts_plot, mid[:, h],    label='Pred (centro)', linestyle='--', alpha=0.8)
 plt.fill_between(ts_plot, lo[:, h], hi[:, h], alpha=0.2, label=f'CQR {int((1-ALPHA)*100)}%')
 plt.title(f'Conformal CQR — horizonte {h+1} (weather, target={target_col})')
 plt.xlabel('Tiempo'); plt.ylabel('Valor'); plt.grid(alpha=0.3, linestyle='--'); plt.legend()
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, f'cqr_h{h+1}.png'))
-plt.show()
 
 plt.figure(figsize=(8,4))
 plt.plot(train_losses, label='Pinball loss (train)')
 plt.title('Curva de pérdida (K-quantiles)'); plt.xlabel('Época'); plt.ylabel('Loss'); plt.grid(alpha=0.3, linestyle='--'); plt.legend()
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'loss_kquantiles.png'))
-plt.show()
+
 
 # ===== Guardar resumen en TXT (simple) =====
 from pathlib import Path
