@@ -1,0 +1,26 @@
+# Resumen de la corrida
+{
+  "run_name": "Location2_Power_0.05_seq144_pred1_20251020-194342",
+  "stamp": "20251020-194342",
+  "dataset_path": "data/Location2.csv",
+  "target": "Power",
+  "seq_len": 144,
+  "pred_len": 1,
+  "alpha": 0.05,
+  "K": 101,
+  "test_size": 0.3,
+  "calib_ratio": 0.1,
+  "metrics": {
+    "crps_mean": 0.006169664673507214,
+    "crps_median": 0.0028431362006813288,
+    "crps_p10": 0.0008796210750006139,
+    "crps_p25": 0.0013144356198608875,
+    "crps_p75": 0.006231565028429031,
+    "crps_p90": 0.014488811418414115,
+    "crps_p95": 0.02537852898240089,
+    "crps_total": 80.8041000366211,
+    "coverage": 0.8654654026031494,
+    "width": 0.04264145344495773
+  },
+  "conformal_eps_file": "resultados_CQR\\Location2_Power_0.05_seq144_pred1_20251020-194342\\conformal_eps.npy"
+}

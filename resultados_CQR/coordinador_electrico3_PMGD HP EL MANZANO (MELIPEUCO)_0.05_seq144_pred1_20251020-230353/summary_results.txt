@@ -1,0 +1,26 @@
+# Resumen de la corrida
+{
+  "run_name": "coordinador_electrico3_PMGD HP EL MANZANO (MELIPEUCO)_0.05_seq144_pred1_20251020-230353",
+  "stamp": "20251020-230353",
+  "dataset_path": "data/coordinador_electrico3.csv",
+  "target": "PMGD HP EL MANZANO (MELIPEUCO)",
+  "seq_len": 144,
+  "pred_len": 1,
+  "alpha": 0.05,
+  "K": 101,
+  "test_size": 0.3,
+  "calib_ratio": 0.1,
+  "metrics": {
+    "crps_mean": 0.06875666230916977,
+    "crps_median": 0.013537854887545109,
+    "crps_p10": 0.006597383413463831,
+    "crps_p25": 0.00859843217767775,
+    "crps_p75": 0.06423183530569077,
+    "crps_p90": 0.0929000973701477,
+    "crps_p95": 0.16894406080245972,
+    "crps_total": 720.2947998046875,
+    "coverage": 0.9414852857589722,
+    "width": 0.5225420594215393
+  },
+  "conformal_eps_file": "resultados_CQR\\coordinador_electrico3_PMGD HP EL MANZANO (MELIPEUCO)_0.05_seq144_pred1_20251020-230353\\conformal_eps.npy"
+}

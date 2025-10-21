@@ -1,0 +1,26 @@
+# Resumen de la corrida
+{
+  "run_name": "coordinador_electrico3_TER YUNGAY_0.05_seq144_pred1_20251020-231146",
+  "stamp": "20251020-231146",
+  "dataset_path": "data/coordinador_electrico3.csv",
+  "target": "TER YUNGAY",
+  "seq_len": 144,
+  "pred_len": 1,
+  "alpha": 0.05,
+  "K": 101,
+  "test_size": 0.3,
+  "calib_ratio": 0.1,
+  "metrics": {
+    "crps_mean": 0.048320334404706955,
+    "crps_median": 0.0003927501093130559,
+    "crps_p10": 0.0003927501093130559,
+    "crps_p25": 0.0003927501093130559,
+    "crps_p75": 0.0003927501093130559,
+    "crps_p90": 0.0003927501093130559,
+    "crps_p95": 0.00799463433213532,
+    "crps_total": 506.2038269042969,
+    "coverage": 0.9946544766426086,
+    "width": 0.14766672253608704
+  },
+  "conformal_eps_file": "resultados_CQR\\coordinador_electrico3_TER YUNGAY_0.05_seq144_pred1_20251020-231146\\conformal_eps.npy"
+}

@@ -1,0 +1,26 @@
+# Resumen de la corrida
+{
+  "run_name": "coordinador_electrico3_PMGD HP EL LLANO_0.05_seq144_pred1_20251020-230059",
+  "stamp": "20251020-230059",
+  "dataset_path": "data/coordinador_electrico3.csv",
+  "target": "PMGD HP EL LLANO",
+  "seq_len": 144,
+  "pred_len": 1,
+  "alpha": 0.05,
+  "K": 101,
+  "test_size": 0.3,
+  "calib_ratio": 0.1,
+  "metrics": {
+    "crps_mean": 0.018733439967036247,
+    "crps_median": 0.003201352432370186,
+    "crps_p10": 0.001262426027096808,
+    "crps_p25": 0.0027943708701059222,
+    "crps_p75": 0.003726663999259472,
+    "crps_p90": 0.021052530966699123,
+    "crps_p95": 0.0944465696811676,
+    "crps_total": 196.25152587890625,
+    "coverage": 0.9104620218276978,
+    "width": 0.216202512383461
+  },
+  "conformal_eps_file": "resultados_CQR\\coordinador_electrico3_PMGD HP EL LLANO_0.05_seq144_pred1_20251020-230059\\conformal_eps.npy"
+}

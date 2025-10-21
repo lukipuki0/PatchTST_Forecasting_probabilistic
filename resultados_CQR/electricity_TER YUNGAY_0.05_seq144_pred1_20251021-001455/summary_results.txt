@@ -1,0 +1,26 @@
+# Resumen de la corrida
+{
+  "run_name": "electricity_TER YUNGAY_0.05_seq144_pred1_20251021-001455",
+  "stamp": "20251021-001455",
+  "dataset_path": "data/electricity.csv",
+  "target": "OT",
+  "seq_len": 144,
+  "pred_len": 1,
+  "alpha": 0.05,
+  "K": 101,
+  "test_size": 0.2,
+  "calib_ratio": 0.1,
+  "metrics": {
+    "crps_mean": 62.9793586730957,
+    "crps_median": 39.32225036621094,
+    "crps_p10": 17.359571266174317,
+    "crps_p25": 21.4782133102417,
+    "crps_p75": 77.85180282592773,
+    "crps_p90": 136.25821685791024,
+    "crps_p95": 182.34850158691404,
+    "crps_total": 329508.0,
+    "coverage": 0.9464831948280334,
+    "width": 437.3121032714844
+  },
+  "conformal_eps_file": "resultados_CQR\\electricity_TER YUNGAY_0.05_seq144_pred1_20251021-001455\\conformal_eps.npy"
+}

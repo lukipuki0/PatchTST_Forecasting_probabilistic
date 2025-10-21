@@ -1,0 +1,26 @@
+# Resumen de la corrida
+{
+  "run_name": "electricity_4_0.05_seq144_pred1_20251021-002144",
+  "stamp": "20251021-002144",
+  "dataset_path": "data/electricity.csv",
+  "target": "4",
+  "seq_len": 144,
+  "pred_len": 1,
+  "alpha": 0.05,
+  "K": 2,
+  "test_size": 0.2,
+  "calib_ratio": 0.1,
+  "metrics": {
+    "crps_mean": 2.345327854156494,
+    "crps_median": 1.6783391237258911,
+    "crps_p10": 1.3370530009269714,
+    "crps_p25": 1.4591846764087677,
+    "crps_p75": 1.9157885313034058,
+    "crps_p90": 2.328375339508058,
+    "crps_p95": 5.286934113502495,
+    "crps_total": 12270.755859375,
+    "coverage": 0.9520260095596313,
+    "width": 78.80300903320312
+  },
+  "conformal_eps_file": "resultados_CQR\\electricity_4_0.05_seq144_pred1_20251021-002144\\conformal_eps.npy"
+}

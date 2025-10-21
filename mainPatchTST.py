@@ -13,8 +13,12 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
 
-
-# ====== Importar modelo base (acepta nombres comunes) ======
+from pathlib import Path
+from datetime import datetime
+import json
+import os
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"[INFO] Usando device: {device}")
 _mod = importlib.import_module('Models.PatchTST')
 BaseModel = None
 for _name in ('Model', 'PatchTST', 'PatchTSTModel'):
@@ -30,27 +34,53 @@ from conformal.cqr import cqr_calibrate, cqr_apply, coverage_width
 
 # ===================== CONFIG =====================
 CSV_PATH    = 'data/electricity.csv'   
-#CSV_PATH    = 'data/weather.csv'  
+#CSV_PATH    = 'data/Location4.csv'  
+#CSV_PATH    = 'data/weather.csv'
 #CSV_PATH    = 'data/top3_menos_nulos.csv'
-TARGET_COL  = '2'           
-
-N_STEPS_IN  = 144   
+#CSV_PATH    = 'data/coordinador_electrico3.csv'
+#CSV_PATH    = 'data/generacion_eolica_oct-nov-dic22.csv'  
+#TARGET_COL     = 'PE AURORA'     
+TARGET_COL  = '4'     
+#TARGET_COL  = 'T (degC)'
+#TARGET_COL  = 'Power'
+#TARGET_COL  = 'PMGD HP EL MANZANO (MELIPEUCO)'
+#TARGET_COL  = 'PMGD HP EL LLANO'
+#TARGET_COL  = 'TER YUNGAY'
+N_STEPS_IN  = 168
 N_STEPS_OUT = 1
 TEST_SIZE   = 0.1
 CALIB_RATIO = 0.1           
-BATCH_SIZE  = 256
-EPOCHS      = 40
+BATCH_SIZE  = 264
+EPOCHS      = 200
 LR          = 1e-4
-print(LR)
+
 
 ALPHA = 0.05  
 _q = list(np.round(np.linspace(0.01, 0.99, 99), 4))
 _q += [0.025, 0.975]
+_q  = [0.025, 0.975]
 QUANTILES = tuple(sorted(set(_q)))
 
 STEP_A_GRAFICAR = 1           
-RESULTS_DIR = 'resultados_CQR'
+#RESULTS_DIR = 'resultados_CQR'
+#INPUT_FORMAT = 'channels_last' 
 INPUT_FORMAT = 'channels_last' 
+dataset_name = Path(CSV_PATH).stem
+
+
+# ====== Creación de carpeta de resultados única para esta ejecución ======
+# 1. Generamos un nombre único y descriptivo para la corrida
+stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+run_name = f"{dataset_name}_{TARGET_COL}_{ALPHA}_seq{N_STEPS_IN}_pred{N_STEPS_OUT}_{stamp}"
+
+# 2. Definimos la ruta de la nueva carpeta
+BASE_RESULTS_DIR = 'resultados_CQR'  # Carpeta principal que contendrá todas las ejecuciones
+RESULTS_DIR = os.path.join(BASE_RESULTS_DIR, run_name) # Ruta específica para esta ejecución
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
+print(f"[INFO] Los resultados de esta corrida se guardarán en: {RESULTS_DIR}")
+
+
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -87,13 +117,11 @@ def closest_idx(taus, target):
 
 df = pd.read_csv(CSV_PATH)
 
-TIME_COL_CANDS = ['date', 'Date', 'Date Time', 'datetime', 'timestamp', 'time']
+TIME_COL_CANDS = ['date', 'Date', 'Date Time', 'datetime', 'timestamp', 'Time']
 time_col = next((c for c in TIME_COL_CANDS if c in df.columns), None)
 
 
-# --- Verificación de columna objetivo ---
 if TARGET_COL not in df.columns:
-    # Intenta encontrarla con heurística si no existe la configurada
     print(f"[WARN] Columna '{TARGET_COL}' no encontrada. Intentando heurística...")
     if 'OT' in df.columns: target_col = 'OT'
     elif 'T (degC)' in df.columns: target_col = 'T (degC)'
@@ -122,8 +150,7 @@ else:
         .sort_index()
     )
     
-    # <<< ESTA ES LA LÓGICA CLAVE MEJORADA >>>
-    # 1. Intentamos inferir la frecuencia directamente de los datos del CSV.
+
     inferred_freq = pd.infer_freq(serie.index)
     
     if inferred_freq:
@@ -138,11 +165,9 @@ else:
     
     prediction_index = serie.index
 
-# Interpolar para rellenar cualquier hueco que haya quedado (muy importante)
+# Interpolar para rellenar cualquier hueco que haya quedado 
 serie['y'] = serie['y'].interpolate(method='linear', limit_direction='both')
 print(f"[INFO] Serie procesada: {len(serie)} filas. Rango: {prediction_index.min()} — {prediction_index.max()}")
-
-
 
 # ===================== Sliding window =====================
 vals = serie['y'].values
@@ -213,7 +238,7 @@ class BasePointAdapter(nn.Module):
         if out.dim() == 3 and out.shape[-1] == 1: out = out.squeeze(-1)
         return out  # [B,H]
 
-# Configs (ajusta números si quieres)
+# Configs 
 class Configs:
     def __init__(self):
         self.enc_in = 1
@@ -224,8 +249,8 @@ class Configs:
         self.d_model = 128
         self.d_ff = 256
         self.dropout = 0.2
-        self.fc_dropout = 0.2
-        self.head_dropout = 0.2
+        self.fc_dropout = 0.5
+        self.head_dropout = 0.5
         self.individual = False
         self.patch_len = 16
         self.stride = 8
@@ -355,7 +380,6 @@ crps_median  = float(np.median(crps_np))
 p10, p25, p75, p90, p95 = np.percentile(crps_np, [10, 25, 75, 90, 95])
 crps_total   = float(crps_np.sum())    # "total" = suma sobre todas las muestras
 
-# imprime el resumen enriquecido
 print(
     "[TEST] "
     f"crps medio={crps_mean:.4f}  |  mediana={crps_median:.4f}  |  "
@@ -374,7 +398,7 @@ if LAST_N and LAST_N > 0:
     print(f"[TEST] crps final (últimos {n})={crps_final:.4f}")
 
 # ===================== Visualización =====================
-h = max(0, min(N_STEPS_OUT-1, STEP_A_GRAFICAR-1))
+'''h = max(0, min(N_STEPS_OUT-1, STEP_A_GRAFICAR-1))
 ts_plot = prediction_start_ts[split_idx:]
 mid = 0.5 * (lo + hi)
 
@@ -391,15 +415,44 @@ plt.plot(train_losses, label='Pinball loss (train)')
 plt.title('Curva de pérdida (K-quantiles)'); plt.xlabel('Época'); plt.ylabel('Loss'); plt.grid(alpha=0.3, linestyle='--'); plt.legend()
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'loss_kquantiles.png'))
+'''
+# ===================== Visualización =====================
+h = max(0, min(N_STEPS_OUT-1, STEP_A_GRAFICAR-1))
 
+# ts_plot se define con TODOS los puntos de test
+ts_plot = prediction_start_ts[split_idx:]
+# Ntest ya está definido en tu script como y_true.shape[0]
 
+# --- INICIO DE LA CORRECCIÓN ---
+# Filtramos solo los últimos 500 puntos para todas las variables del gráfico
+n_plot = 500
+if Ntest > n_plot:
+    y_true = y_true[-n_plot:]
+    lo = lo[-n_plot:]
+    hi = hi[-n_plot:]
+    ts_plot = ts_plot[-n_plot:]  # <-- ESTA ES LA LÍNEA QUE FALTABA
+# --- FIN DE LA CORRECCIÓN ---
+
+# 'mid' no se usa en tu gráfico, así que puedes comentarlo o quitarlo
+# mid = 0.5 * (lo + hi) 
+
+plt.figure(figsize=(15,6))
+# El código de ploteo ahora usa las variables filtradas (de 500 puntos)
+plt.plot(ts_plot, y_true[:, h], label='Real', alpha=0.9)
+plt.fill_between(ts_plot, lo[:, h], hi[:, h], alpha=0.2, label=f'CQR {int((1-ALPHA)*100)}%')
+plt.title(f'Conformal CQR — horizonte {h+1} (weather, target={target_col}) - Últimos {n_plot} puntos')
+plt.xlabel('Tiempo'); plt.ylabel('Valor'); plt.grid(alpha=0.3, linestyle='--'); plt.legend()
+plt.tight_layout()
+# Te sugiero cambiar el nombre del archivo para no sobrescribir el gráfico completo
+plt.savefig(os.path.join(RESULTS_DIR, f'cqr_h{h+1}.png'))
+# --- El gráfico de pérdida no cambia ---
+plt.figure(figsize=(8,4))
+plt.plot(train_losses, label='Pinball loss (train)')
+plt.title('Curva de pérdida (K-quantiles)'); plt.xlabel('Época'); plt.ylabel('Loss'); plt.grid(alpha=0.3, linestyle='--'); plt.legend()
+plt.tight_layout()
+plt.savefig(os.path.join(RESULTS_DIR, 'loss_kquantiles.png'))
 # ===== Guardar resumen en TXT (simple) =====
-from pathlib import Path
-from datetime import datetime
-import json
-import os
 
-# aseguramos métricas agregadas
 crps_mean   = float(crps_np.mean())
 crps_median = float(np.median(crps_np))
 p10, p25, p75, p90, p95 = map(float, np.percentile(crps_np, [10, 25, 75, 90, 95]))
@@ -407,23 +460,21 @@ crps_total  = float(crps_np.sum())
 cov_mean    = float(cov.mean().item())
 width_mean  = float(width.mean().item())
 
-# nombre de corrida sin depender de "args"
-stamp    = datetime.now().strftime("%Y%m%d-%H%M%S")
-run_name = f"{stamp}_seq{N_STEPS_IN}_pred{N_STEPS_OUT}_alpha{ALPHA}_K{len(QUANTILES)}"
-
-# carpeta y archivo
-log_dir  = Path("resultados_CQR")
-log_dir.mkdir(parents=True, exist_ok=True)
-log_path = log_dir / f"{run_name}.txt"
+# El nombre del archivo de log será fijo dentro de su carpeta
+log_path = os.path.join(RESULTS_DIR, "summary_results.txt")
 
 payload = {
+    "run_name": run_name,
     "stamp": stamp,
+    "dataset_path": str(CSV_PATH),  
     "target": str(target_col) if 'target_col' in globals() else None,
     "seq_len": int(N_STEPS_IN),
     "pred_len": int(N_STEPS_OUT),
     "alpha": float(ALPHA),
     "K": int(len(QUANTILES)),
-    "quantiles": list(map(float, QUANTILES))[:20] + (["..."] if len(QUANTILES) > 20 else []),
+    'test_size': float(TEST_SIZE),
+    'calib_ratio': float(CALIB_RATIO),
+    
 
     "metrics": {
         "crps_mean": crps_mean,
@@ -438,8 +489,7 @@ payload = {
         "width": width_mean
     },
 
-    # info útil extra si existe el archivo de eps
-    "conformal_eps_file": os.path.join("resultados_CQR", "conformal_eps.npy")
+    "conformal_eps_file": os.path.join(RESULTS_DIR, "conformal_eps.npy")
 }
 
 with open(log_path, "w", encoding="utf-8") as f:
@@ -447,4 +497,4 @@ with open(log_path, "w", encoding="utf-8") as f:
     f.write(json.dumps(payload, ensure_ascii=False, indent=2))
     f.write("\n")
 
-print(f"[LOG] TXT guardado en: {log_path}")
+print(f"[LOG] Resumen TXT guardado en: {log_path}")
